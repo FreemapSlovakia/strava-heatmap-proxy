@@ -161,22 +161,15 @@ async function getCfSession(s4) {
 
     req.setEncoding("utf8");
 
-    // const data = [];
-
     req.on("data", (chunk) => {
-      // data.push(chunk);
+      // ignore
     });
-
-    // req.on("end", () => {
-    // });
 
     req.end();
   });
 }
 
 const cooks = await getCfSession(ss4);
-
-// client2.close();
 
 console.log(cooks);
 
@@ -197,23 +190,30 @@ http
     req.on("response", (headers, flags) => {
       const status = headers[http2.constants.HTTP2_HEADER_STATUS];
 
-      for (const name in headers) {
-        console.log(`> ${name}: ${headers[name]}`);
-      }
+      const ct = headers[http2.constants.HTTP2_HEADER_CONTENT_TYPE];
 
-      res1.setHeader(
-        "Content-Type",
-        headers[http2.constants.HTTP2_HEADER_CONTENT_TYPE]
-      );
-      // stream.respond(headers);
+      if (status === 200 && ct && ct.startsWith("image/")) {
+        res1.setHeader("Content-Type", ct);
+      } else {
+        for (const name in headers) {
+          console.log(`> ${name}: ${headers[name]}`);
+        }
+
+        res1.writeHead(500).end();
+      }
     });
 
     req.on("error", (err) => {
-      console.log("EEEEEEEEE", err);
+      console.error(err);
+
+      if (!res1.headersSent) {
+        res1.writeHead(500);
+      }
+
+      res1.end();
     });
 
     req.on("data", (chunk) => {
-      console.log("CH", chunk);
       res1.write(chunk);
     });
 
@@ -223,4 +223,4 @@ http
 
     req.end();
   })
-  .listen(Number(process.env.SP_PASSWORD || "8080"));
+  .listen(Number(process.env.SP_PORT || "8080"));
