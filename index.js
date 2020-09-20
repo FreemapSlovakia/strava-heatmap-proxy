@@ -223,4 +223,4 @@ http
 
     req.end();
   })
-  .listen(8080);
+  .listen(Number(process.env.SP_PASSWORD || "8080"));
