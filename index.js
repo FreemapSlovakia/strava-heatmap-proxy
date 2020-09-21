@@ -177,12 +177,9 @@ async function run() {
 
   http
     .createServer((req1, res1) => {
-      const [, zoom, x, y] = req1.url.split("/");
-
       const req = getClient2().request({
         [http2.constants.HTTP2_HEADER_METHOD]: http2.constants.HTTP2_METHOD_GET,
-        [http2.constants
-          .HTTP2_HEADER_PATH]: `/tiles-auth/both/bluered/${zoom}/${x}/${y}.png?px=256`,
+        [http2.constants.HTTP2_HEADER_PATH]: "/tiles-auth" + req1.url,
         [http2.constants.HTTP2_HEADER_COOKIE]: [
           `_strava4_session=${ss4}`,
           ...cooks.map((cook) => cook.replace(/;.*/, "")),
