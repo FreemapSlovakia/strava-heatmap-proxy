@@ -193,6 +193,8 @@ async function run() {
 
         if (status === 200 && ct && ct.startsWith("image/")) {
           res1.setHeader("Content-Type", ct);
+        } else if (status === 404) {
+          res1.writeHead(404).end();
         } else {
           for (const name in headers) {
             console.log(`> ${name}: ${headers[name]}`);
