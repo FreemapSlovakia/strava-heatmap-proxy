@@ -24,7 +24,6 @@ server {
   listen [::]:80;
   server_name strava-heatmap.tiles.freemap.sk;
 
-
   location / {
     proxy_pass http://localhost:8080;
     proxy_cache STRAVA;
