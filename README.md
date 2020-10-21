@@ -4,9 +4,9 @@ This is a HTTP proxt to access high-zoom Strava heatmap without requiring user t
 
 ## Environment variables
 
-- SP_EMAIL - Strava login e-mail
-- SP_PASSWORD - Strava login password
-- SP_PORT - Proxy port (defalt 8080)
+- `SP_EMAIL` - Strava login e-mail
+- `SP_PASSWORD` - Strava login password
+- `SP_PORT` - Proxy port (defalt 8080)
 
 ## Nginx configuration
 
