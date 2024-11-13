@@ -1,2 +1,5 @@
 .env
 node_modules
+dist
+cookies.json
+*.BAK
