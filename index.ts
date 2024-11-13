@@ -159,7 +159,7 @@ createServer((req, res) => {
     console.log(
       status +
         ": " +
-        (req.socket.address() as any).address +
+        req.headers["x-forwarded-for"] +
         " | " +
         req.headers["referer"] +
         " | " +
