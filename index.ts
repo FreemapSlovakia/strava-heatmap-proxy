@@ -6,6 +6,8 @@ import fs from "fs/promises";
 const COOKIE_PATH = "./cookies.json";
 
 async function saveCookies(cookies: Protocol.Network.Cookie[]) {
+  console.log("Saving cookies");
+
   await fs.writeFile(
     COOKIE_PATH,
     JSON.stringify(
@@ -21,6 +23,8 @@ async function saveCookies(cookies: Protocol.Network.Cookie[]) {
 }
 
 async function loadCookies(): Promise<CookieParam[]> {
+  console.log("Loading cookies");
+
   try {
     return JSON.parse(await fs.readFile(COOKIE_PATH, "utf-8"));
   } catch (error) {
@@ -37,6 +41,7 @@ async function loginToStrava(): Promise<
     browser = await launch({
       headless: true,
       devtools: false,
+      timeout: 0,
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
@@ -57,23 +62,33 @@ async function loginToStrava(): Promise<
     await page.setCookie(...cookies);
 
     async function tryTile() {
+      console.log("Trying the tile...");
+
       const response = await page.goto(
         "https://heatmap-external-c.strava.com/tiles-auth/all/blue/15/18319/11293.png",
         { waitUntil: "networkidle2" }
       );
 
-      return response?.headers()["content-type"].startsWith("image/");
+      const ok = response?.headers()["content-type"].startsWith("image/");
+
+      console.log("Tile: " + (ok ? "OK" : "FAIL"));
+
+      return ok;
     }
 
     if (await tryTile()) {
       return cookies;
     }
 
+    console.log("Trying the onboarding...");
+
     await page.goto("https://www.strava.com/onboarding", {
       waitUntil: "networkidle2",
     });
 
     if (page.url() === "https://www.strava.com/login") {
+      console.log("Redirected to log-in page");
+
       await page.type("#email", process.env.SP_EMAIL!);
       await page.type("#password", process.env.SP_PASSWORD!);
 
@@ -81,6 +96,8 @@ async function loginToStrava(): Promise<
         page.click('button[type="submit"]'),
         page.waitForNavigation({ waitUntil: "networkidle2" }),
       ]);
+    } else {
+      console.log("Onboarding: OK");
     }
 
     if (await tryTile()) {
