@@ -159,11 +159,11 @@ createServer((req, res) => {
     console.log(
       status +
         ": " +
-        req.socket.address() +
+        (req.socket.address() as any).address +
         " | " +
-        req.headers["Referer"] +
+        req.headers["referer"] +
         " | " +
-        req.headers["User-Agent"]
+        req.headers["user-agent"]
     );
 
     const ct = ensureSingle(headers[constants.HTTP2_HEADER_CONTENT_TYPE]);
