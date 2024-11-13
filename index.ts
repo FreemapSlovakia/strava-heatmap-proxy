@@ -156,6 +156,16 @@ createServer((req, res) => {
   clientStream.on("response", (headers) => {
     const status = Number(ensureSingle(headers[constants.HTTP2_HEADER_STATUS]));
 
+    console.log(
+      status +
+        ": " +
+        req.socket.address() +
+        " | " +
+        req.headers["Referer"] +
+        " | " +
+        req.headers["User-Agent"]
+    );
+
     const ct = ensureSingle(headers[constants.HTTP2_HEADER_CONTENT_TYPE]);
 
     if (status === 200 && ct && ct?.startsWith("image/")) {
@@ -163,9 +173,11 @@ createServer((req, res) => {
     } else if (status === 404) {
       res.writeHead(404).end();
     } else {
-      for (const name in headers) {
-        console.log(`> ${name}: ${headers[name]}`);
-      }
+      console.warn(
+        Object.entries(headers)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join("|")
+      );
 
       res.writeHead(500).end();
     }
