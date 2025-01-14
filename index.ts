@@ -89,11 +89,11 @@ async function loginToStrava(): Promise<
     if (page.url() === "https://www.strava.com/login") {
       console.log("Redirected to log-in page");
 
-      await page.type("#email", process.env.SP_EMAIL!);
-      await page.type("#password", process.env.SP_PASSWORD!);
+      await page.type("#desktop-email", process.env.SP_EMAIL!);
+      await page.type("#desktop-current-password", process.env.SP_PASSWORD!);
 
       await Promise.all([
-        page.click('button[type="submit"]'),
+        page.click("#desktop-login-button"),
         page.waitForNavigation({ waitUntil: "networkidle2" }),
       ]);
     } else {
