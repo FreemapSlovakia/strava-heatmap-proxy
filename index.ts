@@ -1,7 +1,8 @@
 import { ClientHttp2Session, connect, constants } from "node:http2";
 import { createServer } from "node:http";
-import { Browser, CookieParam, Page, Protocol, launch } from "puppeteer";
+import { Browser, CookieData, Page, Protocol, launch } from "puppeteer";
 import fs from "fs/promises";
+import { exit } from "node:process";
 
 const COOKIE_PATH = "./cookies.json";
 
@@ -22,7 +23,7 @@ async function saveCookies(cookies: Protocol.Network.Cookie[]) {
   );
 }
 
-async function loadCookies(): Promise<CookieParam[]> {
+async function loadCookies(): Promise<CookieData[]> {
   console.log("Loading cookies");
 
   try {
@@ -32,41 +33,40 @@ async function loadCookies(): Promise<CookieParam[]> {
   }
 }
 
-async function loginToStrava(): Promise<
-  (CookieParam | Protocol.Network.Cookie)[]
-> {
+async function loginToStrava(): Promise<CookieData[]> {
   let browser: Browser | undefined;
 
   try {
     browser = await launch({
-      headless: true,
+      headless: false,
       devtools: false,
       timeout: 0,
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-blink-features=AutomationControlled",
+        "--window-size=1000,1400",
       ],
     });
 
-    const page: Page = await browser.newPage();
+    const [page] = await browser.pages();
 
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"
     );
 
-    await page.setViewport({ width: 1280, height: 800 });
+    await page.setViewport({ width: 1000, height: 1400 });
 
     const cookies = await loadCookies();
 
-    await page.setCookie(...cookies);
+    await browser.setCookie(...cookies);
 
     async function tryTile() {
       console.log("Trying the tile...");
 
       const response = await page.goto(
-        "https://heatmap-external-c.strava.com/tiles-auth/all/blue/15/18319/11293.png",
-        { waitUntil: "networkidle2" }
+        "https://content-a.strava.com/identified/globalheat/all/blue/15/5264/12655.png",
+        { waitUntil: "networkidle0" }
       );
 
       const ok = response?.headers()["content-type"].startsWith("image/");
@@ -83,38 +83,94 @@ async function loginToStrava(): Promise<
     console.log("Trying the onboarding...");
 
     await page.goto("https://www.strava.com/onboarding", {
-      waitUntil: "networkidle2",
+      waitUntil: "networkidle0",
     });
 
     if (page.url() === "https://www.strava.com/login") {
       console.log("Redirected to log-in page");
 
-      await page.type("#desktop-email", process.env.SP_EMAIL!);
-      await page.type("#desktop-current-password", process.env.SP_PASSWORD!);
+      let flash;
 
-      await Promise.all([
-        page.click("#desktop-login-button"),
-        page.waitForNavigation({ waitUntil: "networkidle2" }),
-      ]);
+      do {
+        await page.waitForFunction(() => 'document.readyState === "complete"');
+
+        console.log("Waiting for email input");
+
+        const e = await select(page, "#desktop-email");
+
+        console.log("Entering email");
+
+        await e!.type(process.env.SP_EMAIL!);
+
+        console.log("Pressing enter");
+
+        await page.keyboard.press("Enter");
+
+        console.log("Waiting for result");
+
+        flash = await Promise.race([
+          page
+            .waitForSelector("div[data-testid=use-password-cta] > button")
+            .then(() => false),
+          page.waitForSelector("#flashMessage").then(() => true),
+        ]);
+
+        console.log("Flash: ", flash);
+      } while (flash);
+
+      console.log("Waiting for use password button");
+
+      let btn = await select(
+        page,
+        "div[data-testid=use-password-cta] > button"
+      );
+
+      console.log("Pressing enter");
+
+      await btn?.press("Enter");
+
+      console.log("Typing password");
+
+      let pw = await select(page, "input[type=password]");
+
+      await pw!.type(process.env.SP_PASSWORD!);
+
+      console.log("Submitting");
+
+      await page.keyboard.press("Enter");
     } else {
       console.log("Onboarding: OK");
     }
 
-    if (await tryTile()) {
-      return cookies;
-    }
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+
+    // if (await tryTile()) {
+    //   return cookies;
+    // }
 
     await page.goto("https://www.strava.com/maps/global-heatmap", {
-      waitUntil: "networkidle2",
+      waitUntil: "load",
     });
 
     await page.waitForResponse((response) =>
-      response.url().includes("heatmap-external")
+      response.url().includes("content-a")
     );
+
+    // await new Promise((resolve) => setTimeout(resolve, 10000));
+
+    if (!(await tryTile())) {
+      console.error("Can't load tile");
+
+      exit(1);
+    }
+
+    // await new Promise((resolve) => setTimeout(resolve, 5000000));
 
     const client = await page.createCDPSession();
 
     await saveCookies((await client.send("Network.getAllCookies")).cookies);
+
+    // await new Promise((resolve) => setTimeout(resolve, 500000));
 
     return cookies;
   } finally {
@@ -124,6 +180,18 @@ async function loginToStrava(): Promise<
   }
 }
 
+async function select(page: Page, selector: string) {
+  await page.waitForSelector(selector);
+
+  const els = await page.$$(selector);
+
+  const visibles = await Promise.all(
+    els.map((el) => el.evaluate((el) => el.checkVisibility() as boolean))
+  );
+
+  return els[visibles.findIndex((v) => v)];
+}
+
 const cookies = await loginToStrava();
 
 let client2: Record<string, ClientHttp2Session> = {};
@@ -131,7 +199,7 @@ let client2: Record<string, ClientHttp2Session> = {};
 function getClient2(key: string) {
   return client2[key] && !client2[key].destroyed
     ? client2[key]
-    : connect(`https://heatmap-external-${key}.strava.com`);
+    : connect(`https://content-a.strava.com`);
 }
 
 function ensureSingle<T>(header: T | T[] | undefined) {
@@ -147,7 +215,7 @@ createServer((req, res) => {
 
   const clientStream = getClient2(keys[keyIndex]).request({
     [constants.HTTP2_HEADER_METHOD]: constants.HTTP2_METHOD_GET,
-    [constants.HTTP2_HEADER_PATH]: "/tiles-auth" + req.url,
+    [constants.HTTP2_HEADER_PATH]: "/identified/globalheat" + req.url,
     [constants.HTTP2_HEADER_COOKIE]: cookies
       .map((cookie) => `${cookie.name}=${cookie.value}`)
       .join("; "),
