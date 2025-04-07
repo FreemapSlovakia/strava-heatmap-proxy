@@ -19,11 +19,5 @@
     "eslint-plugin-prettier": "^5.2.6",
     "prettier": "^3.5.3",
     "typescript": "^5.8.3"
-  },
-  "dependencies": {
-    "playwright": "^1.51.1",
-    "puppeteer": "^24.6.0",
-    "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2"
   }
 }
