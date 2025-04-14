@@ -88,7 +88,9 @@ createServer((req, res) => {
         " | " +
         req.headers["referer"] +
         " | " +
-        req.headers["user-agent"]
+        req.headers["user-agent"] +
+        " | " +
+        req.url
     );
 
     const ct = ensureSingle(headers[constants.HTTP2_HEADER_CONTENT_TYPE]);
