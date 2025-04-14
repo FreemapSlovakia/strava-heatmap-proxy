@@ -65,6 +65,8 @@ function getCookies() {
 
 getCookies();
 
+setInterval(() => getCookies(), 6 * 60 * 60_000);
+
 createServer((req, res) => {
   const clientStream = getClient2("https://content-a.strava.com").request({
     [constants.HTTP2_HEADER_METHOD]: constants.HTTP2_METHOD_GET,
