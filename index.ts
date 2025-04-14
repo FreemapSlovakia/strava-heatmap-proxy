@@ -4,35 +4,84 @@ import { createServer } from "node:http";
 let client2: Record<string, ClientHttp2Session> = {};
 
 function getClient2(key: string) {
-  return client2[key] && !client2[key].destroyed
-    ? client2[key]
-    : connect(`https://content-a.strava.com`);
+  if (client2[key] && !client2[key].destroyed) {
+    return client2[key];
+  }
+
+  client2[key] = connect(key);
+
+  return client2[key];
 }
 
 function ensureSingle<T>(header: T | T[] | undefined) {
   return Array.isArray(header) ? header[0] : header;
 }
 
-const keys = ["a", "b", "c"];
+function ensureMany<T>(header: T | T[] | undefined) {
+  return header == null ? [] : Array.isArray(header) ? header : [header];
+}
 
-let keyIndex = 0;
+let cookies: string;
 
-createServer((req, res) => {
-  keyIndex = (keyIndex + 1) % keys.length;
+let last = 0;
 
-  const clientStream = getClient2(keys[keyIndex]).request({
+function getCookies() {
+  const now = Date.now();
+
+  if (now - last < 240000) {
+    return;
+  }
+
+  last = now;
+
+  console.log("Reading cookies");
+
+  const clientStream = getClient2("https://www.strava.com").request({
     [constants.HTTP2_HEADER_METHOD]: constants.HTTP2_METHOD_GET,
-    [constants.HTTP2_HEADER_PATH]: "/identified/globalheat" + req.url,
+    [constants.HTTP2_HEADER_PATH]:
+      "/maps/global-heatmap?sport=All&style=dark&terrain=false&labels=true&poi=true&cPhotos=true&gColor=blue&gOpacity=100",
     [constants.HTTP2_HEADER_COOKIE]:
-      "sp=0701716b-30bf-4628-9ac9-8294cdd74b9c; CloudFront-Key-Pair-Id=K3VK9UFQYD04PI; CloudFront-Policy=eyJTdGF0ZW1lbnQiOiBbeyJSZXNvdXJjZSI6Imh0dHBzOi8vKmNvbnRlbnQtKi5zdHJhdmEuY29tL2lkZW50aWZpZWQvKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc0NDEzMDA0OH19fV19; CloudFront-Signature=XOqHH0ht5dwXIyKPmGgD75qERDdg9rNCYnSsVCiElXM4WDOUomiRn7sJLyHxxyQmsnYEdGg8MX~xIQVuR77UAQz~t12uH~M7BXArsp~~iy8nafABwqFXF8KmRrBZWH6BUHQpwscnnWptU0JerYM7vHO9dOiGH~xBm4XP06l1Kx-H2QLgicKHrT1Od2Az9jdlPwK4-nRDVmc5T38WqISTDZ364DpozDCuBikJEwlzimt9ctgrgQCee-EYyqOTSTjojTUm-eHoV4V52tpY0joDh-P3tIU~nuymLg5zgLq6Y5NbgdOdnkC8IFb07XaNNEO1lEQlY0gezww3DA5ANJhMKQ__; _strava_idcf=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE3NDQxMzAwNDgsImlhdCI6MTc0NDA0MzY0OCwiYXRobGV0ZUlkIjoyOTk1ODI0MSwidGltZXN0YW1wIjoxNzQ0MDQzNjQ4fQ.FvlQ7DtsxdlMz3M4CT7K9d9uLFNb2TroONZKcioo89c; _strava_CloudFront-Expires=1744130048000; _strava4_session=anvjef5bblkfgahoi3f9fqv70smpkdno",
+      "_strava4_session=eier68hdchci83gf4kb0pre1inqnqvdt",
   });
 
   clientStream.on("response", (headers) => {
     const status = Number(ensureSingle(headers[constants.HTTP2_HEADER_STATUS]));
 
+    if (status !== 200) {
+      console.error("invalid response status");
+
+      process.exit(1);
+    }
+
+    cookies = ensureMany(headers[constants.HTTP2_HEADER_SET_COOKIE])
+      .map((cookie) => cookie.replace(/;.*/, ""))
+      .join("; ");
+
+    clientStream.close();
+
+    console.log("Cookies read");
+  });
+}
+
+getCookies();
+
+createServer((req, res) => {
+  const clientStream = getClient2("https://content-a.strava.com").request({
+    [constants.HTTP2_HEADER_METHOD]: constants.HTTP2_METHOD_GET,
+    [constants.HTTP2_HEADER_PATH]: "/identified/globalheat" + req.url,
+    [constants.HTTP2_HEADER_COOKIE]: cookies,
+  });
+
+  clientStream.on("response", (headers) => {
+    const status = Number(ensureSingle(headers[constants.HTTP2_HEADER_STATUS]));
+
+    if (status === 403) {
+      getCookies();
+    }
+
     console.log(
       status +
-        ": " +
+        " | " +
         req.headers["x-forwarded-for"] +
         " | " +
         req.headers["referer"] +
