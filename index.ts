@@ -67,7 +67,7 @@ getCookies();
 
 setInterval(() => getCookies(), 6 * 60 * 60_000);
 
-createServer((req, res) => {
+const server = createServer((req, res) => {
   const clientStream = getClient2("https://content-a.strava.com").request({
     [constants.HTTP2_HEADER_METHOD]: constants.HTTP2_METHOD_GET,
     [constants.HTTP2_HEADER_PATH]: "/identified/globalheat" + req.url,
@@ -81,22 +81,25 @@ createServer((req, res) => {
       getCookies();
     }
 
-    console.log(
-      status +
-        " | " +
-        req.headers["x-forwarded-for"] +
-        " | " +
-        req.headers["referer"] +
-        " | " +
-        req.headers["user-agent"] +
-        " | " +
-        req.url
-    );
+    // console.log(
+    //   status +
+    //     " | " +
+    //     req.headers["x-forwarded-for"] +
+    //     " | " +
+    //     req.headers["referer"] +
+    //     " | " +
+    //     req.headers["user-agent"] +
+    //     " | " +
+    //     req.url
+    // );
 
     const ct = ensureSingle(headers[constants.HTTP2_HEADER_CONTENT_TYPE]);
 
     if (status === 200 && ct && ct?.startsWith("image/")) {
-      res.setHeader("Content-Type", ct);
+      if (!res.headersSent) {
+        res.setHeader("Content-Type", ct);
+        res.setHeader("Access-Control-Allow-Origin", "*");
+      }
     } else if (status === 404) {
       res.writeHead(404).end();
     } else {
@@ -130,3 +133,15 @@ createServer((req, res) => {
 
   clientStream.end();
 }).listen(Number(process.env.SP_PORT || "8080"));
+
+// Graceful shutdown on Ctrl+C
+process.on("SIGINT", () => {
+  console.log("Shutting down...");
+  server.close(() => {
+    // Close all HTTP/2 sessions
+    Object.values(client2).forEach((session) => {
+      if (!session.destroyed) session.close();
+    });
+    process.exit(0);
+  });
+});
