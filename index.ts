@@ -1,5 +1,6 @@
 import { ClientHttp2Session, connect, constants } from "node:http2";
 import { createServer } from "node:http";
+import { env } from "node:process";
 
 let client2: Record<string, ClientHttp2Session> = {};
 
@@ -37,11 +38,10 @@ function getCookies() {
   console.log("Reading cookies");
 
   const clientStream = getClient2("https://www.strava.com").request({
-    [constants.HTTP2_HEADER_METHOD]: constants.HTTP2_METHOD_GET,
-    [constants.HTTP2_HEADER_PATH]:
-      "/maps/global-heatmap?sport=All&style=dark&terrain=false&labels=true&poi=true&cPhotos=true&gColor=blue&gOpacity=100",
-    [constants.HTTP2_HEADER_COOKIE]:
-      "_strava4_session=eier68hdchci83gf4kb0pre1inqnqvdt",
+    [constants.HTTP2_HEADER_METHOD]: constants.HTTP2_METHOD_POST,
+    [constants.HTTP2_HEADER_PATH]: "/api/next/refresh-cookies",
+    [constants.HTTP2_HEADER_CONTENT_LENGTH]: "0",
+    [constants.HTTP2_HEADER_COOKIE]: "_strava4_session=" + env.SP_SESSION,
   });
 
   clientStream.on("response", (headers) => {
@@ -53,13 +53,21 @@ function getCookies() {
       process.exit(1);
     }
 
-    cookies = ensureMany(headers[constants.HTTP2_HEADER_SET_COOKIE])
-      .map((cookie) => cookie.replace(/;.*/, ""))
-      .join("; ");
+    const latestCookies = new Map<string, string>();
+
+    for (const cookie of ensureMany(
+      headers[constants.HTTP2_HEADER_SET_COOKIE],
+    )) {
+      const [pair] = cookie.split(";", 1);
+      const [name] = pair.split("=", 1);
+      latestCookies.set(name, pair);
+    }
+
+    cookies = Array.from(latestCookies.values()).join("; ");
 
     clientStream.close();
 
-    console.log("Cookies read");
+    console.log("Cookies read", cookies);
   });
 }
 
@@ -90,7 +98,7 @@ createServer((req, res) => {
         " | " +
         req.headers["user-agent"] +
         " | " +
-        req.url
+        req.url,
     );
 
     const ct = ensureSingle(headers[constants.HTTP2_HEADER_CONTENT_TYPE]);
@@ -103,7 +111,7 @@ createServer((req, res) => {
       console.warn(
         Object.entries(headers)
           .map(([k, v]) => `${k}: ${v}`)
-          .join("|")
+          .join("|"),
       );
 
       res.writeHead(500).end();
@@ -129,4 +137,4 @@ createServer((req, res) => {
   });
 
   clientStream.end();
-}).listen(Number(process.env.SP_PORT || "8080"));
+}).listen(Number(env.SP_PORT || "8080"));
